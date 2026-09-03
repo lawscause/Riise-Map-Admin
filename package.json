@@ -10,7 +10,8 @@
     "build:lambda": "cd artifacts/api-server && node ./build.mjs --lambda",
     "deploy:api": "pnpm run build:lambda && sam deploy --guided",
     "test:e2e": "npx playwright test",
-    "test:local": "npx playwright test --config playwright.local.config.ts"
+    "test:local": "npx playwright test --config playwright.local.config.ts",
+    "test": "pnpm -r --if-present run test"
   },
   "private": true,
   "devDependencies": {
