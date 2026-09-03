@@ -2,6 +2,17 @@ import type { AuthService } from "./auth-service";
 import { AuthValidationError } from "./auth-service";
 import { CognitoAuthAdapter } from "./cognito-auth-adapter";
 
+function isSupabaseUser(value: unknown): value is { id: string; email: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    typeof (value as { id: unknown }).id === "string" &&
+    "email" in value &&
+    typeof (value as { email: unknown }).email === "string"
+  );
+}
+
 export function createAuthService(): AuthService {
   const provider = process.env.AUTH_PROVIDER || "cognito";
 
@@ -28,7 +39,10 @@ export function createAuthService(): AuthService {
           if (!response.ok) {
             throw new AuthValidationError("Invalid or expired token");
           }
-          const user = await response.json();
+          const user: unknown = await response.json();
+          if (!isSupabaseUser(user)) {
+            throw new AuthValidationError("Unexpected Supabase user response shape");
+          }
           return { providerUserId: user.id, email: user.email, provider: "supabase" };
         },
       };
