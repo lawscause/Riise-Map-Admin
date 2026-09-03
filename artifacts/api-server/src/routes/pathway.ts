@@ -2,19 +2,14 @@ import { Router, type IRouter } from "express";
 import { db, pathwaysTable, insertPathwaySchema, learnersTable, programsTable, pathwayProgramsTable } from "@workspace/db";
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { logAudit } from "./audit-log";
+import { requireOrg } from "../lib/tenant";
 
 const router: IRouter = Router();
 
-function getOrgId(req: any): number | null {
-  return req.dbUser?.orgId ?? null;
-}
-
 router.get("/pathways", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
-    const orgId = getOrgId(req);
-    const pathways = orgId
-      ? await db.select().from(pathwaysTable).where(eq(pathwaysTable.orgId, orgId))
-      : await db.select().from(pathwaysTable);
+    const pathways = await db.select().from(pathwaysTable).where(eq(pathwaysTable.orgId, orgId));
     res.json(pathways);
   } catch (error) {
     console.error("Error fetching pathways:", error);
@@ -23,10 +18,10 @@ router.get("/pathways", async (req, res) => {
 });
 
 router.get("/pathways/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
-    const where = orgId ? and(eq(pathwaysTable.id, id), eq(pathwaysTable.orgId, orgId)) : eq(pathwaysTable.id, id);
+    const where = and(eq(pathwaysTable.id, id), eq(pathwaysTable.orgId, orgId));
     const pathway = await db.select().from(pathwaysTable).where(where);
     if (pathway.length === 0) { res.status(404).json({ error: "Pathway not found" }); return; }
     res.json(pathway[0]);
@@ -37,9 +32,9 @@ router.get("/pathways/:id", async (req, res) => {
 });
 
 router.post("/pathways", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const data = insertPathwaySchema.parse(req.body);
-    const orgId = getOrgId(req);
     const [newPathway] = await db.insert(pathwaysTable).values({ ...data, orgId }).returning();
     await logAudit(req, "created", "pathway", newPathway.id, newPathway.name);
     res.status(201).json(newPathway);
@@ -50,11 +45,11 @@ router.post("/pathways", async (req, res) => {
 });
 
 router.put("/pathways/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
     const data = insertPathwaySchema.partial().parse(req.body);
-    const where = orgId ? and(eq(pathwaysTable.id, id), eq(pathwaysTable.orgId, orgId)) : eq(pathwaysTable.id, id);
+    const where = and(eq(pathwaysTable.id, id), eq(pathwaysTable.orgId, orgId));
     const [updatedPathway] = await db.update(pathwaysTable).set(data).where(where).returning();
     if (!updatedPathway) { res.status(404).json({ error: "Pathway not found" }); return; }
     await logAudit(req, "updated", "pathway", id, updatedPathway.name);
@@ -66,10 +61,10 @@ router.put("/pathways/:id", async (req, res) => {
 });
 
 router.delete("/pathways/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
-    const where = orgId ? and(eq(pathwaysTable.id, id), eq(pathwaysTable.orgId, orgId)) : eq(pathwaysTable.id, id);
+    const where = and(eq(pathwaysTable.id, id), eq(pathwaysTable.orgId, orgId));
     const [deleted] = await db.delete(pathwaysTable).where(where).returning();
     if (!deleted) { res.status(404).json({ error: "Pathway not found" }); return; }
     await logAudit(req, "deleted", "pathway", id, deleted.name);
@@ -81,10 +76,10 @@ router.delete("/pathways/:id", async (req, res) => {
 });
 
 router.post("/pathways/import", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const rows: unknown[] = req.body;
     if (!Array.isArray(rows) || rows.length === 0) { res.status(400).json({ error: "Request body must be a non-empty array" }); return; }
-    const orgId = getOrgId(req);
     const results = { imported: 0, ids: [] as number[], errors: [] as { row: number; message: string }[] };
     for (let i = 0; i < rows.length; i++) {
       try {
@@ -112,14 +107,14 @@ router.post("/pathways/import", async (req, res) => {
 });
 
 router.post("/pathways/bulk-delete", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const ids: number[] = req.body.ids;
     if (!Array.isArray(ids) || ids.length === 0) { res.status(400).json({ error: "ids array is required" }); return; }
-    const orgId = getOrgId(req);
     const deleted: number[] = [];
     const blocked: { id: number; reason: string }[] = [];
     for (const id of ids) {
-      const where = orgId ? and(eq(pathwaysTable.id, id), eq(pathwaysTable.orgId, orgId)) : eq(pathwaysTable.id, id);
+      const where = and(eq(pathwaysTable.id, id), eq(pathwaysTable.orgId, orgId));
       const [pathway] = await db.select().from(pathwaysTable).where(where);
       if (!pathway) continue;
       const learners = await db.select().from(learnersTable).where(eq(learnersTable.pathway, pathway.name));

@@ -7,20 +7,15 @@ import {
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { logAudit } from "./audit-log";
+import { requireOrg } from "../lib/tenant";
 
 const router: IRouter = Router();
 
-function getOrgId(req: any): number | null {
-  return req.dbUser?.orgId ?? null;
-}
-
 // Get all learners
 router.get("/learners", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
-    const orgId = getOrgId(req);
-    const learners = orgId
-      ? await db.select().from(learnersTable).where(eq(learnersTable.orgId, orgId))
-      : await db.select().from(learnersTable);
+    const learners = await db.select().from(learnersTable).where(eq(learnersTable.orgId, orgId));
     res.json(learners);
   } catch (error) {
     console.error("Error fetching learners:", error);
@@ -30,10 +25,10 @@ router.get("/learners", async (req, res) => {
 
 // Get single learner
 router.get("/learners/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
-    const where = orgId ? and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId)) : eq(learnersTable.id, id);
+    const where = and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId));
     const learner = await db.select().from(learnersTable).where(where);
     if (learner.length === 0) { res.status(404).json({ error: "Learner not found" }); return; }
     res.json(learner[0]);
@@ -45,9 +40,9 @@ router.get("/learners/:id", async (req, res) => {
 
 // Create learner
 router.post("/learners", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const data = insertLearnerSchema.parse(req.body);
-    const orgId = getOrgId(req);
     const existing = await db.select().from(learnersTable).where(eq(learnersTable.email, data.email));
     if (existing.length > 0) {
       return res.status(409).json({ error: "A learner with this email already exists." });
@@ -63,11 +58,11 @@ router.post("/learners", async (req, res) => {
 
 // Update learner
 router.put("/learners/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
     const data = insertLearnerSchema.parse(req.body);
-    const where = orgId ? and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId)) : eq(learnersTable.id, id);
+    const where = and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId));
     const [updatedLearner] = await db.update(learnersTable).set(data).where(where).returning();
     if (!updatedLearner) { res.status(404).json({ error: "Learner not found" }); return; }
     await logAudit(req, "updated", "learner", id, updatedLearner.name);
@@ -80,10 +75,10 @@ router.put("/learners/:id", async (req, res) => {
 
 // Get learner summary
 router.get("/learners/:id/summary", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
-    const where = orgId ? and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId)) : eq(learnersTable.id, id);
+    const where = and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId));
     const [learner] = await db.select().from(learnersTable).where(where);
     if (!learner) { res.status(404).json({ error: "Learner not found" }); return; }
 
@@ -114,10 +109,10 @@ router.get("/learners/:id/summary", async (req, res) => {
 
 // Bulk import learners
 router.post("/learners/import", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const rows: unknown[] = req.body;
     if (!Array.isArray(rows) || rows.length === 0) { res.status(400).json({ error: "Request body must be a non-empty array" }); return; }
-    const orgId = getOrgId(req);
     const results = { imported: 0, errors: [] as { row: number; message: string }[] };
     for (let i = 0; i < rows.length; i++) {
       try {
@@ -151,10 +146,10 @@ router.post("/learners/import", async (req, res) => {
 
 // Delete single learner
 router.delete("/learners/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
-    const where = orgId ? and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId)) : eq(learnersTable.id, id);
+    const where = and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId));
     const [deleted] = await db.delete(learnersTable).where(where).returning();
     if (!deleted) { res.status(404).json({ error: "Learner not found" }); return; }
     await logAudit(req, "deleted", "learner", id, deleted.name);
@@ -167,13 +162,13 @@ router.delete("/learners/:id", async (req, res) => {
 
 // Bulk delete learners
 router.post("/learners/bulk-delete", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const ids: number[] = req.body.ids;
     if (!Array.isArray(ids) || ids.length === 0) { res.status(400).json({ error: "ids array is required" }); return; }
-    const orgId = getOrgId(req);
     let deleted = 0;
     for (const id of ids) {
-      const where = orgId ? and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId)) : eq(learnersTable.id, id);
+      const where = and(eq(learnersTable.id, id), eq(learnersTable.orgId, orgId));
       const result = await db.delete(learnersTable).where(where).returning();
       if (result.length > 0) {
         deleted++;
