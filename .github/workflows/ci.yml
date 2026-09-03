@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # The root package.json has no `packageManager` field, so Corepack has nothing
+      # to read; pin the pnpm major here instead. pnpm-workspace.yaml uses pnpm 10-only
+      # settings (minimumReleaseAge, allowBuilds). If a `packageManager` pin is added
+      # later, drop `version:` and let the action read it.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # PGlite runs in-process; no DATABASE_URL, no services, no secrets.
+      - run: pnpm -r test
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Root typecheck is red on main (pre-existing). Non-blocking until T10 lands a
+    # green baseline — whoever lands T10: remove `continue-on-error` below.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - id: typecheck
+        run: pnpm typecheck
+
+      - if: always()
+        env:
+          OUTCOME: ${{ steps.typecheck.outcome }}
+        run: |
+          {
+            echo "## typecheck: ${OUTCOME}"
+            echo
+            echo "non-blocking until root typecheck is green (T10)"
+          } >> "$GITHUB_STEP_SUMMARY"
