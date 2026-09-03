@@ -158,10 +158,14 @@ router.put("/pathways/:id/programs", async (req, res) => {
     }
   }
   try {
-    await db.delete(pathwayProgramsTable).where(eq(pathwayProgramsTable.pathwayId, pathwayId));
-    if (programIds && programIds.length > 0) {
-      await db.insert(pathwayProgramsTable).values(programIds.map(programId => ({ pathwayId, programId })));
-    }
+    // Delete + insert must succeed or fail together: a failed insert used to
+    // leave the pathway with its links deleted.
+    await db.transaction(async (tx) => {
+      await tx.delete(pathwayProgramsTable).where(eq(pathwayProgramsTable.pathwayId, pathwayId));
+      if (programIds && programIds.length > 0) {
+        await tx.insert(pathwayProgramsTable).values(programIds.map(programId => ({ pathwayId, programId })));
+      }
+    });
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: "Failed to update pathway programs" }); }
 });
