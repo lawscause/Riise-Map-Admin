@@ -57,12 +57,12 @@ export default function FundingSources() {
     return b.name.localeCompare(a.name);
   });
 
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingSource, setEditingSource] = useState<FundingSource | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // Goals state
@@ -82,13 +82,13 @@ export default function FundingSources() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Multi-select delete state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const baseUrl = import.meta.env.VITE_API_URL || "";
 
-  const fetchGoals = useCallback(async (fundingSourceId: string) => {
+  const fetchGoals = useCallback(async (fundingSourceId: number) => {
     try {
       const res = await authFetch(`${baseUrl}/api/funding-sources/${fundingSourceId}/goals`);
       if (res.ok) setGoals(await res.json());
@@ -99,8 +99,8 @@ export default function FundingSources() {
     if (selected) {
       fetchGoals(selected);
       const s = sources.find((x: FundingSource) => x.id === selected);
-      setNarrativeText((s as any)?.narrative || "");
-      setNarrativeFileName((s as any)?.narrativeFileName || null);
+      setNarrativeText(s?.narrative || "");
+      setNarrativeFileName(s?.narrativeFileName || null);
       setNarrativeDirty(false);
     }
   }, [selected, sources, fetchGoals]);
@@ -147,7 +147,7 @@ export default function FundingSources() {
     setForm({
       name: s.name,
       objectives: s.objectives || "",
-      narrative: (s as any).narrative || "",
+      narrative: s.narrative || "",
       startDate: s.startDate || "",
       endDate: s.endDate || "",
       amount: s.amount != null ? String(s.amount) : "",
@@ -692,7 +692,7 @@ export default function FundingSources() {
             <Button variant="destructive" disabled={bulkDeleting} onClick={async () => {
               setBulkDeleting(true);
               try {
-                const res = await authFetch(`${baseUrl}/api/funding-sources/bulk-delete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: [...selectedIds].map(Number) }) });
+                const res = await authFetch(`${baseUrl}/api/funding-sources/bulk-delete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: [...selectedIds] }) });
                 const result = await res.json();
                 queryClient.invalidateQueries({ queryKey: ["/api/funding-sources"] });
                 setSelectedIds(new Set());

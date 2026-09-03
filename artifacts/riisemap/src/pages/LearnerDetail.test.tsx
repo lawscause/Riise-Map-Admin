@@ -42,6 +42,8 @@ const learner: Learner = {
   nextAction: "Review portfolio",
   joinDate: "2026-06-01",
   email: "ada@example.org",
+  flaggedForSupport: false,
+  createdAt: "2026-06-01T00:00:00.000Z",
 };
 
 /** Routes the generated hooks' GETs by path; anything unexpected fails loudly. */
