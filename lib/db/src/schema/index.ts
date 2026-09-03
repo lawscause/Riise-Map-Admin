@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, varchar, date, jsonb, numeric, timestamp, boolean, customType, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, varchar, date, jsonb, numeric, timestamp, boolean, customType, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -279,6 +279,7 @@ export type FundingSourceGoal = typeof fundingSourceGoalsTable.$inferSelect;
 // Success Stories Table
 export const successStoriesTable = pgTable("success_stories", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizationsTable.id),
   learnerId: integer("learner_id").references(() => learnersTable.id, { onDelete: "set null" }),
   learnerName: varchar("learner_name", { length: 255 }).notNull(),
   headline: varchar("headline", { length: 255 }).notNull(),
@@ -286,9 +287,11 @@ export const successStoriesTable = pgTable("success_stories", {
   dataPoints: jsonb("data_points"),
   tags: jsonb("tags"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => ({
+  orgIdIdx: index("success_stories_org_id_idx").on(table.orgId),
+}));
 
-export const insertSuccessStorySchema = createInsertSchema(successStoriesTable).omit({ id: true, createdAt: true });
+export const insertSuccessStorySchema = createInsertSchema(successStoriesTable).omit({ id: true, orgId: true, createdAt: true });
 export type InsertSuccessStory = z.infer<typeof insertSuccessStorySchema>;
 export type SuccessStory = typeof successStoriesTable.$inferSelect;
 
@@ -311,6 +314,7 @@ export type PathwayProgram = typeof pathwayProgramsTable.$inferSelect;
 // Audit Log Table
 export const auditLogTable = pgTable("audit_log", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizationsTable.id),
   action: varchar("action", { length: 20 }).notNull(), // created, updated, deleted
   entityType: varchar("entity_type", { length: 50 }).notNull(), // learner, program, pathway, funding_source, etc.
   entityId: integer("entity_id"),
@@ -318,5 +322,7 @@ export const auditLogTable = pgTable("audit_log", {
   userEmail: varchar("user_email", { length: 255 }),
   details: text("details"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => ({
+  orgIdIdx: index("audit_log_org_id_idx").on(table.orgId),
+}));
 export type AuditLog = typeof auditLogTable.$inferSelect;
