@@ -23,14 +23,19 @@ import {
   useGetPrograms, useGetPathways
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/lib/UserContext";
 import { cn } from "@/lib/utils";
 import { authFetch } from "@/lib/auth-fetch";
+import { apiErrorMessage } from "@/lib/api-error";
+
+const DELETE_LEARNER_FALLBACK = "Failed to delete learner";
 
 export default function LearnerDetail() {
   const { id } = useParams<{ id: string }>();
   const learnerId = parseInt(id || "0");
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { user } = useUser();
   const { data: learner, isLoading } = useGetLearner(learnerId);
   const { data: programs = [] } = useGetPrograms();
@@ -119,13 +124,26 @@ export default function LearnerDetail() {
     setIsEditing(false);
   }
 
+  /**
+   * Failure leaves the confirm dialog open so the user can retry or cancel;
+   * only a confirmed 2xx leaves the page, after the list cache is invalidated
+   * so the learners table cannot show the deleted row.
+   */
   async function handleDeleteLearner() {
     if (deleteConfirmText !== learner!.name) return;
     const baseUrl = import.meta.env.VITE_API_URL || "";
     try {
-      await authFetch(`${baseUrl}/api/learners/${learnerId}`, { method: "DELETE" });
+      const res = await authFetch(`${baseUrl}/api/learners/${learnerId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body: unknown = await res.json().catch(() => null);
+        toast({ title: "Error", description: apiErrorMessage(body, DELETE_LEARNER_FALLBACK), variant: "destructive" });
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["/api/learners"] });
       navigate("/learners");
-    } catch {}
+    } catch {
+      toast({ title: "Error", description: DELETE_LEARNER_FALLBACK, variant: "destructive" });
+    }
   }
 
   function handleSaveNote() {
