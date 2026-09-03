@@ -12,14 +12,6 @@ export interface LearnerRoadmap {
   dueDate: string;
 }
 
-export interface LearnerProject {
-  id: number;
-  learnerId: number;
-  title: string;
-  completion: number;
-  status: string;
-}
-
 export interface LearnerEvent {
   id: number;
   learnerId: number;
@@ -55,15 +47,6 @@ export function useGetLearnerRoadmaps(id: number, options?: { query?: UseQueryOp
   return useQuery<LearnerRoadmap[], ErrorType>({
     queryKey: [`/api/learners/${id}/roadmaps`],
     queryFn: ({ signal }) => customFetch(`/api/learners/${id}/roadmaps`, { method: "GET", signal }),
-    enabled: !!id,
-    ...options?.query,
-  });
-}
-
-export function useGetLearnerProjects(id: number, options?: { query?: UseQueryOptions<LearnerProject[], ErrorType> }) {
-  return useQuery<LearnerProject[], ErrorType>({
-    queryKey: [`/api/learners/${id}/projects`],
-    queryFn: ({ signal }) => customFetch(`/api/learners/${id}/projects`, { method: "GET", signal }),
     enabled: !!id,
     ...options?.query,
   });

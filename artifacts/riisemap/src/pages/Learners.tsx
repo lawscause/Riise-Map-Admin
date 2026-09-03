@@ -80,7 +80,7 @@ export default function Learners() {
       }
     }
   });
-  const [newLearnerId, setNewLearnerId] = useState<string | null>(null);
+  const [newLearnerId, setNewLearnerId] = useState<number | null>(null);
   const { data: allPathways = [] } = useGetPathways();
   const { data: allPrograms = [] } = useGetPrograms();
   const [pathwayProgramLinks, setPathwayProgramLinks] = useState<{ pathwayId: number; programId: number }[]>([]);
@@ -245,7 +245,7 @@ export default function Learners() {
           email: inviteForm.email.trim(),
         }
       });
-      setNewLearnerId(String(newLearner.id));
+      setNewLearnerId(newLearner.id);
       await navigator.clipboard.writeText(inviteForm.message);
       setInviteStep(1);
     } catch (error: any) {

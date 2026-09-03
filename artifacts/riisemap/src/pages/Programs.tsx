@@ -181,7 +181,7 @@ export default function Programs() {
     setEditingProgram(p);
     setForm({
       name: p.name,
-      programTag: (p as any).programTag || "",
+      programTag: p.programTag || "",
       description: p.description,
       pathwayCategory: p.pathwayCategory,
       cohort: p.cohort,

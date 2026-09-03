@@ -689,6 +689,7 @@ function HealthDot({ status }: { status: HealthStatus }) {
     off_track: 'bg-red-500',
     not_started: 'bg-gray-400',
     no_targets: 'bg-gray-400',
+    expiring_soon: 'bg-orange-500',
   };
   return <span className={cn('h-3 w-3 rounded-full', colorMap[status])} />;
 }
