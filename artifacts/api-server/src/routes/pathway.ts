@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db, pathwaysTable, insertPathwaySchema, learnersTable, programsTable, pathwayProgramsTable } from "@workspace/db";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, count, getTableColumns } from "drizzle-orm";
 import { logAudit } from "./audit-log";
-import { requireOrg } from "../lib/tenant";
+import { requireOrg, ownedPathway, HttpError } from "../lib/tenant";
 
 const router: IRouter = Router();
 
@@ -134,17 +134,30 @@ router.post("/pathways/bulk-delete", async (req, res) => {
 });
 
 router.get("/pathways/:id/programs", async (req, res) => {
+  const pathwayId = parseInt(req.params.id);
+  await ownedPathway(req, pathwayId);
   try {
-    const pathwayId = parseInt(req.params.id);
     const links = await db.select().from(pathwayProgramsTable).where(eq(pathwayProgramsTable.pathwayId, pathwayId));
     res.json(links.map(l => l.programId));
   } catch (error) { res.status(500).json({ error: "Failed to fetch pathway programs" }); }
 });
 
 router.put("/pathways/:id/programs", async (req, res) => {
+  const pathwayId = parseInt(req.params.id);
+  const orgId = await ownedPathway(req, pathwayId);
+  const { programIds } = req.body as { programIds?: number[] };
+  if (programIds && programIds.length > 0) {
+    // Every requested program must be an own-org program; one count query, checked before any write.
+    const distinctIds = [...new Set(programIds)];
+    const [{ owned }] = await db
+      .select({ owned: count() })
+      .from(programsTable)
+      .where(and(inArray(programsTable.id, distinctIds), eq(programsTable.orgId, orgId)));
+    if (Number(owned) !== distinctIds.length) {
+      throw new HttpError(400, "programIds must reference programs in your organization");
+    }
+  }
   try {
-    const pathwayId = parseInt(req.params.id);
-    const { programIds } = req.body as { programIds: number[] };
     await db.delete(pathwayProgramsTable).where(eq(pathwayProgramsTable.pathwayId, pathwayId));
     if (programIds && programIds.length > 0) {
       await db.insert(pathwayProgramsTable).values(programIds.map(programId => ({ pathwayId, programId })));
@@ -154,8 +167,13 @@ router.put("/pathways/:id/programs", async (req, res) => {
 });
 
 router.get("/pathway-programs", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
-    const all = await db.select().from(pathwayProgramsTable);
+    const all = await db
+      .select(getTableColumns(pathwayProgramsTable))
+      .from(pathwayProgramsTable)
+      .innerJoin(pathwaysTable, eq(pathwayProgramsTable.pathwayId, pathwaysTable.id))
+      .where(eq(pathwaysTable.orgId, orgId));
     res.json(all);
   } catch (error) { res.status(500).json({ error: "Failed to fetch pathway programs" }); }
 });

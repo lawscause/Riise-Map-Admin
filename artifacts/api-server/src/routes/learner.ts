@@ -7,7 +7,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { logAudit } from "./audit-log";
-import { requireOrg } from "../lib/tenant";
+import { requireOrg, ownedLearner } from "../lib/tenant";
 
 const router: IRouter = Router();
 
@@ -183,42 +183,49 @@ router.post("/learners/bulk-delete", async (req, res) => {
 });
 
 // --- Learner sub-resources ---
+// Each handler awaits ownedLearner() before its try block: a learner outside the
+// caller's org throws HttpError(404), which Express 5 forwards to the error handler.
 
 router.get("/learners/:id/roadmaps", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
-    const id = parseInt(req.params.id);
     const rows = await db.select().from(learnerRoadmapsTable).where(eq(learnerRoadmapsTable.learnerId, id));
     res.json(rows);
   } catch (error) { res.status(500).json({ error: "Failed to fetch roadmaps" }); }
 });
 
 router.get("/learners/:id/projects", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
-    const id = parseInt(req.params.id);
     const rows = await db.select().from(learnerProjectsTable).where(eq(learnerProjectsTable.learnerId, id));
     res.json(rows);
   } catch (error) { res.status(500).json({ error: "Failed to fetch projects" }); }
 });
 
 router.get("/learners/:id/events", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
-    const id = parseInt(req.params.id);
     const rows = await db.select().from(learnerEventsTable).where(eq(learnerEventsTable.learnerId, id));
     res.json(rows);
   } catch (error) { res.status(500).json({ error: "Failed to fetch events" }); }
 });
 
 router.get("/learners/:id/notes", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
-    const id = parseInt(req.params.id);
     const rows = await db.select().from(learnerNotesTable).where(eq(learnerNotesTable.learnerId, id)).orderBy(desc(learnerNotesTable.id));
     res.json(rows);
   } catch (error) { res.status(500).json({ error: "Failed to fetch notes" }); }
 });
 
 router.post("/learners/:id/notes", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
-    const id = parseInt(req.params.id);
     const data = insertLearnerNoteSchema.parse({ ...req.body, learnerId: id });
     const [note] = await db.insert(learnerNotesTable).values(data).returning();
     res.status(201).json(note);
@@ -226,34 +233,41 @@ router.post("/learners/:id/notes", async (req, res) => {
 });
 
 router.put("/learners/:id/notes/:noteId", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
     const noteId = parseInt(req.params.noteId);
-    const [updated] = await db.update(learnerNotesTable).set({ content: req.body.content }).where(eq(learnerNotesTable.id, noteId)).returning();
+    // Match on learnerId too so a note id from another learner cannot be reached through this URL.
+    const [updated] = await db.update(learnerNotesTable).set({ content: req.body.content }).where(and(eq(learnerNotesTable.id, noteId), eq(learnerNotesTable.learnerId, id))).returning();
     if (!updated) { res.status(404).json({ error: "Note not found" }); return; }
     res.json(updated);
   } catch (error) { res.status(400).json({ error: "Failed to update note" }); }
 });
 
 router.delete("/learners/:id/notes/:noteId", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
     const noteId = parseInt(req.params.noteId);
-    const [deleted] = await db.delete(learnerNotesTable).where(eq(learnerNotesTable.id, noteId)).returning();
+    const [deleted] = await db.delete(learnerNotesTable).where(and(eq(learnerNotesTable.id, noteId), eq(learnerNotesTable.learnerId, id))).returning();
     if (!deleted) { res.status(404).json({ error: "Note not found" }); return; }
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: "Failed to delete note" }); }
 });
 
 router.get("/learners/:id/readiness", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
-    const id = parseInt(req.params.id);
     const rows = await db.select().from(learnerReadinessScoresTable).where(eq(learnerReadinessScoresTable.learnerId, id));
     res.json(rows);
   } catch (error) { res.status(500).json({ error: "Failed to fetch readiness" }); }
 });
 
 router.get("/learners/:id/activities", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await ownedLearner(req, id);
   try {
-    const id = parseInt(req.params.id);
     const rows = await db.select().from(learnerActivitiesTable).where(eq(learnerActivitiesTable.learnerId, id));
     res.json(rows);
   } catch (error) { res.status(500).json({ error: "Failed to fetch activities" }); }

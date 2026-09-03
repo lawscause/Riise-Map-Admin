@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import { db, learnersTable } from "@workspace/db";
+import { db, learnersTable, pathwaysTable, fundingSourcesTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 
 /**
@@ -29,17 +29,35 @@ export function requireOrg(req: Request): number {
   return orgId;
 }
 
+type OrgOwnedTable = typeof learnersTable | typeof pathwaysTable | typeof fundingSourcesTable;
+
 /**
- * Assert that a learner belongs to the caller's organization before touching
- * any of its sub-resources. A learner in another org is reported as 404, not
- * 403, so ids never leak existence across tenants.
+ * Shared shape of the ownership guards below: 404 unless `id` exists in the
+ * caller's org. Missing and foreign rows are indistinguishable on purpose, so
+ * ids never leak existence across tenants. Returns the org id so callers can
+ * keep scoping follow-up queries without a second requireOrg.
  */
-export async function ownedLearner(req: Request, learnerId: number): Promise<{ id: number }> {
+async function ownedRow(req: Request, table: OrgOwnedTable, id: number, label: string): Promise<number> {
   const orgId = requireOrg(req);
   const [row] = await db
-    .select({ id: learnersTable.id })
-    .from(learnersTable)
-    .where(and(eq(learnersTable.id, learnerId), eq(learnersTable.orgId, orgId)));
-  if (!row) throw new HttpError(404, "Learner not found");
-  return row;
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, id), eq(table.orgId, orgId)));
+  if (!row) throw new HttpError(404, `${label} not found`);
+  return orgId;
+}
+
+/** Guard for every route under /learners/:id/*. */
+export function ownedLearner(req: Request, learnerId: number): Promise<number> {
+  return ownedRow(req, learnersTable, learnerId, "Learner");
+}
+
+/** Guard for /pathways/:id/programs. */
+export function ownedPathway(req: Request, pathwayId: number): Promise<number> {
+  return ownedRow(req, pathwaysTable, pathwayId, "Pathway");
+}
+
+/** Guard for every route under /funding-sources/:fundingSourceId/goals*. */
+export function ownedFundingSource(req: Request, fundingSourceId: number): Promise<number> {
+  return ownedRow(req, fundingSourcesTable, fundingSourceId, "Funding source");
 }
