@@ -1,14 +1,28 @@
 import { test, expect } from '@playwright/test';
 
-const EMAIL = 'info@techsofcolor.org';
-const PASSWORD = 'RiiseMap2026!';
-const BASE_URL = 'https://app.riisemap.org';
+// Credentials and targets come from the environment; nothing here points at a
+// deployed stack by default. See tests/README.md.
+const EMAIL = process.env.E2E_EMAIL ?? '';
+const PASSWORD = process.env.E2E_PASSWORD ?? '';
+const COGNITO_CLIENT_ID = process.env.E2E_COGNITO_CLIENT_ID ?? '';
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+// The local Vite dev server proxies /api to the api-server, so the API is
+// reachable through BASE_URL. Deployed stacks expose the API on its own host.
+const API_URL = process.env.E2E_API_URL ?? BASE_URL;
 const TS = Date.now();
+
+test.skip(
+  !EMAIL || !PASSWORD || !COGNITO_CLIENT_ID,
+  'Set E2E_EMAIL, E2E_PASSWORD and E2E_COGNITO_CLIENT_ID to run authenticated API tests',
+);
 
 let authToken: string;
 
 // Helper to get auth token via Cognito
 async function getToken(request: any): Promise<string> {
+  if (!EMAIL || !PASSWORD || !COGNITO_CLIENT_ID) {
+    throw new Error('getToken called without E2E credentials; the file-level skip should have prevented this');
+  }
   const res = await request.post('https://cognito-idp.us-east-1.amazonaws.com/', {
     headers: {
       'Content-Type': 'application/x-amz-json-1.1',
@@ -16,16 +30,13 @@ async function getToken(request: any): Promise<string> {
     },
     data: {
       AuthFlow: 'USER_PASSWORD_AUTH',
-      ClientId: 'dvgl229nmkojnubqeupiasp28',
+      ClientId: COGNITO_CLIENT_ID,
       AuthParameters: { USERNAME: EMAIL, PASSWORD: PASSWORD },
     },
   });
   const body = await res.json();
   return body.AuthenticationResult.IdToken;
 }
-
-// Get API URL from the deployed Lambda
-const API_URL = 'https://7in6znqod2.execute-api.us-east-1.amazonaws.com/prod';
 
 test.describe('API Direct CRUD Tests', () => {
   test.beforeAll(async ({ request }) => {

@@ -11,13 +11,15 @@
     "deploy:api": "pnpm run build:lambda && sam deploy --guided",
     "test:e2e": "npx playwright test",
     "test:local": "npx playwright test --config playwright.local.config.ts",
-    "test": "pnpm -r --if-present run test"
+    "test:guard": "vitest run --config tests/guard/vitest.config.ts",
+    "test": "pnpm run test:guard && pnpm -r --if-present run test"
   },
   "private": true,
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "concurrently": "^9.1.2",
     "prettier": "^3.8.3",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.11"
   }
 }

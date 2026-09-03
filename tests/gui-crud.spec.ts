@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
 
-const EMAIL = 'info@techsofcolor.org';
-const PASSWORD = 'RiiseMap2026!';
+const EMAIL = process.env.E2E_EMAIL ?? '';
+const PASSWORD = process.env.E2E_PASSWORD ?? '';
 const TS = Date.now();
+
+test.skip(!EMAIL || !PASSWORD, 'Set E2E_EMAIL and E2E_PASSWORD to run authenticated tests');
 
 async function login(page: any) {
   await page.goto('/');

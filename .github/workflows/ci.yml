@@ -38,6 +38,10 @@ jobs:
       # PGlite runs in-process; no DATABASE_URL, no services, no secrets.
       - run: pnpm -r test
 
+      # The credential/production-hostname guard (tests/guard) lives at the
+      # repo root, which `pnpm -r test` skips.
+      - run: pnpm test:guard
+
   typecheck:
     name: typecheck
     runs-on: ubuntu-latest

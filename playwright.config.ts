@@ -2,9 +2,12 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  // tests/guard holds Vitest guard tests, not Playwright specs.
+  testIgnore: ['**/guard/**'],
   timeout: 60000,
   use: {
-    baseURL: 'https://app.riisemap.org',
+    // Never default to a deployed stack; point E2E_BASE_URL at one explicitly.
+    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
     viewport: { width: 1440, height: 900 },
