@@ -5,6 +5,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { requireAuth } from "./middlewares/auth";
 import { resolveUser } from "./middlewares/resolve-user";
+import { errorHandler } from "./middlewares/error-handler";
 
 const app: Express = express();
 
@@ -36,5 +37,8 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api", requireAuth, resolveUser, router);
+
+// Must be registered after the router so HttpError thrown by tenancy guards reaches it.
+app.use(errorHandler);
 
 export default app;

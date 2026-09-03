@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, fundingSourceGoalsTable, insertFundingSourceGoalSchema } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, fundingSourceGoalsTable, fundingSourcesTable, insertFundingSourceGoalSchema } from "@workspace/db";
+import { eq, and, getTableColumns } from "drizzle-orm";
 import { logAudit } from "./audit-log";
+import { requireOrg, ownedFundingSource } from "../lib/tenant";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx"];
@@ -18,8 +19,13 @@ const router: IRouter = Router();
 
 // List all goals across all funding sources
 router.get("/funding-source-goals", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
-    const goals = await db.select().from(fundingSourceGoalsTable);
+    const goals = await db
+      .select(getTableColumns(fundingSourceGoalsTable))
+      .from(fundingSourceGoalsTable)
+      .innerJoin(fundingSourcesTable, eq(fundingSourceGoalsTable.fundingSourceId, fundingSourcesTable.id))
+      .where(eq(fundingSourcesTable.orgId, orgId));
     res.json(goals);
   } catch (error) {
     console.error("Error fetching all goals:", error);
@@ -29,8 +35,9 @@ router.get("/funding-source-goals", async (req, res) => {
 
 // List goals for a funding source
 router.get("/funding-sources/:fundingSourceId/goals", async (req, res) => {
+  const fundingSourceId = parseInt(req.params.fundingSourceId);
+  await ownedFundingSource(req, fundingSourceId);
   try {
-    const fundingSourceId = parseInt(req.params.fundingSourceId);
     const goals = await db.select().from(fundingSourceGoalsTable).where(eq(fundingSourceGoalsTable.fundingSourceId, fundingSourceId));
     res.json(goals);
   } catch (error) {
@@ -41,8 +48,9 @@ router.get("/funding-sources/:fundingSourceId/goals", async (req, res) => {
 
 // Create a goal
 router.post("/funding-sources/:fundingSourceId/goals", async (req, res) => {
+  const fundingSourceId = parseInt(req.params.fundingSourceId);
+  await ownedFundingSource(req, fundingSourceId);
   try {
-    const fundingSourceId = parseInt(req.params.fundingSourceId);
     const data = insertFundingSourceGoalSchema.parse({ ...req.body, fundingSourceId });
     const [created] = await db.insert(fundingSourceGoalsTable).values(data).returning();
     await logAudit(req, "created", "funding_goal", created.id, created.title);
@@ -55,9 +63,10 @@ router.post("/funding-sources/:fundingSourceId/goals", async (req, res) => {
 
 // Update a goal
 router.put("/funding-sources/:fundingSourceId/goals/:goalId", async (req, res) => {
+  const fundingSourceId = parseInt(req.params.fundingSourceId);
+  await ownedFundingSource(req, fundingSourceId);
   try {
     const goalId = parseInt(req.params.goalId);
-    const fundingSourceId = parseInt(req.params.fundingSourceId);
     const { title, note, status } = req.body;
     const [updated] = await db.update(fundingSourceGoalsTable)
       .set({ title, note, status, updatedAt: new Date() })
@@ -74,9 +83,10 @@ router.put("/funding-sources/:fundingSourceId/goals/:goalId", async (req, res) =
 
 // Delete a goal
 router.delete("/funding-sources/:fundingSourceId/goals/:goalId", async (req, res) => {
+  const fundingSourceId = parseInt(req.params.fundingSourceId);
+  await ownedFundingSource(req, fundingSourceId);
   try {
     const goalId = parseInt(req.params.goalId);
-    const fundingSourceId = parseInt(req.params.fundingSourceId);
     const [deleted] = await db.delete(fundingSourceGoalsTable)
       .where(and(eq(fundingSourceGoalsTable.id, goalId), eq(fundingSourceGoalsTable.fundingSourceId, fundingSourceId)))
       .returning();
@@ -91,9 +101,10 @@ router.delete("/funding-sources/:fundingSourceId/goals/:goalId", async (req, res
 
 // Upload goal document
 router.put("/funding-sources/:fundingSourceId/goals/:goalId/document", async (req, res) => {
+  const fundingSourceId = parseInt(req.params.fundingSourceId);
+  await ownedFundingSource(req, fundingSourceId);
   try {
     const goalId = parseInt(req.params.goalId);
-    const fundingSourceId = parseInt(req.params.fundingSourceId);
     const { fileName, fileData } = req.body;
     if (!fileName || !fileData) { res.status(400).json({ error: "fileName and fileData are required" }); return; }
     const ext = "." + fileName.toLowerCase().split(".").pop();
@@ -114,9 +125,10 @@ router.put("/funding-sources/:fundingSourceId/goals/:goalId/document", async (re
 
 // Download goal document
 router.get("/funding-sources/:fundingSourceId/goals/:goalId/document", async (req, res) => {
+  const fundingSourceId = parseInt(req.params.fundingSourceId);
+  await ownedFundingSource(req, fundingSourceId);
   try {
     const goalId = parseInt(req.params.goalId);
-    const fundingSourceId = parseInt(req.params.fundingSourceId);
     const [goal] = await db.select({ documentFile: fundingSourceGoalsTable.documentFile, documentFileName: fundingSourceGoalsTable.documentFileName })
       .from(fundingSourceGoalsTable)
       .where(and(eq(fundingSourceGoalsTable.id, goalId), eq(fundingSourceGoalsTable.fundingSourceId, fundingSourceId)));
@@ -132,9 +144,10 @@ router.get("/funding-sources/:fundingSourceId/goals/:goalId/document", async (re
 
 // Delete goal document
 router.delete("/funding-sources/:fundingSourceId/goals/:goalId/document", async (req, res) => {
+  const fundingSourceId = parseInt(req.params.fundingSourceId);
+  await ownedFundingSource(req, fundingSourceId);
   try {
     const goalId = parseInt(req.params.goalId);
-    const fundingSourceId = parseInt(req.params.fundingSourceId);
     const [updated] = await db.update(fundingSourceGoalsTable)
       .set({ documentFile: null, documentFileName: null, updatedAt: new Date() })
       .where(and(eq(fundingSourceGoalsTable.id, goalId), eq(fundingSourceGoalsTable.fundingSourceId, fundingSourceId)))

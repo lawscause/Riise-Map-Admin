@@ -2,12 +2,9 @@ import { Router, type IRouter } from "express";
 import { db, programsTable, insertProgramSchema, pathwaysTable, learnersTable, fundingSourcesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { logAudit } from "./audit-log";
+import { requireOrg } from "../lib/tenant";
 
 const router: IRouter = Router();
-
-function getOrgId(req: any): number | null {
-  return req.dbUser?.orgId ?? null;
-}
 
 function computeMetrics(program: any, learners: any[]) {
   const pl = learners.filter(l => l.program === program.name);
@@ -22,14 +19,10 @@ function computeMetrics(program: any, learners: any[]) {
 }
 
 router.get("/programs", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
-    const orgId = getOrgId(req);
-    const programs = orgId
-      ? await db.select().from(programsTable).where(eq(programsTable.orgId, orgId))
-      : await db.select().from(programsTable);
-    const learners = orgId
-      ? await db.select().from(learnersTable).where(eq(learnersTable.orgId, orgId))
-      : await db.select().from(learnersTable);
+    const programs = await db.select().from(programsTable).where(eq(programsTable.orgId, orgId));
+    const learners = await db.select().from(learnersTable).where(eq(learnersTable.orgId, orgId));
     res.json(programs.map(p => computeMetrics(p, learners)));
   } catch (error) {
     console.error("Error fetching programs:", error);
@@ -38,15 +31,13 @@ router.get("/programs", async (req, res) => {
 });
 
 router.get("/programs/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
-    const where = orgId ? and(eq(programsTable.id, id), eq(programsTable.orgId, orgId)) : eq(programsTable.id, id);
+    const where = and(eq(programsTable.id, id), eq(programsTable.orgId, orgId));
     const program = await db.select().from(programsTable).where(where);
     if (program.length === 0) { res.status(404).json({ error: "Program not found" }); return; }
-    const learners = orgId
-      ? await db.select().from(learnersTable).where(eq(learnersTable.orgId, orgId))
-      : await db.select().from(learnersTable);
+    const learners = await db.select().from(learnersTable).where(eq(learnersTable.orgId, orgId));
     res.json(computeMetrics(program[0], learners));
   } catch (error) {
     console.error("Error fetching program:", error);
@@ -55,9 +46,9 @@ router.get("/programs/:id", async (req, res) => {
 });
 
 router.post("/programs", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const data = insertProgramSchema.parse(req.body);
-    const orgId = getOrgId(req);
     const existing = await db.select().from(programsTable).where(eq(programsTable.programTag, data.programTag));
     if (existing.length > 0) {
       return res.status(409).json({ error: "A program with this tag already exists." });
@@ -72,11 +63,11 @@ router.post("/programs", async (req, res) => {
 });
 
 router.put("/programs/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
     const data = insertProgramSchema.partial().parse(req.body);
-    const where = orgId ? and(eq(programsTable.id, id), eq(programsTable.orgId, orgId)) : eq(programsTable.id, id);
+    const where = and(eq(programsTable.id, id), eq(programsTable.orgId, orgId));
     const existing = await db.select().from(programsTable).where(eq(programsTable.programTag, data.programTag));
     if (existing.length > 0 && existing[0].id !== id) {
       return res.status(409).json({ error: "A program with this tag already exists." });
@@ -92,10 +83,10 @@ router.put("/programs/:id", async (req, res) => {
 });
 
 router.delete("/programs/:id", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const id = parseInt(req.params.id);
-    const orgId = getOrgId(req);
-    const where = orgId ? and(eq(programsTable.id, id), eq(programsTable.orgId, orgId)) : eq(programsTable.id, id);
+    const where = and(eq(programsTable.id, id), eq(programsTable.orgId, orgId));
     const program = await db.select().from(programsTable).where(where);
     if (program.length === 0) { res.status(404).json({ error: "Program not found" }); return; }
     await db.delete(programsTable).where(where);
@@ -108,14 +99,14 @@ router.delete("/programs/:id", async (req, res) => {
 });
 
 router.post("/programs/bulk-delete", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const ids: number[] = req.body.ids;
     if (!Array.isArray(ids) || ids.length === 0) { res.status(400).json({ error: "ids array is required" }); return; }
-    const orgId = getOrgId(req);
     const deleted: number[] = [];
     const blocked: { id: number; reason: string }[] = [];
     for (const id of ids) {
-      const where = orgId ? and(eq(programsTable.id, id), eq(programsTable.orgId, orgId)) : eq(programsTable.id, id);
+      const where = and(eq(programsTable.id, id), eq(programsTable.orgId, orgId));
       const [program] = await db.select().from(programsTable).where(where);
       if (!program) continue;
       await db.delete(programsTable).where(where);
@@ -130,10 +121,10 @@ router.post("/programs/bulk-delete", async (req, res) => {
 });
 
 router.post("/programs/import", async (req, res) => {
+  const orgId = requireOrg(req);
   try {
     const rows: unknown[] = req.body;
     if (!Array.isArray(rows) || rows.length === 0) { res.status(400).json({ error: "Request body must be a non-empty array" }); return; }
-    const orgId = getOrgId(req);
     const results = { imported: 0, errors: [] as { row: number; message: string }[] };
     for (let i = 0; i < rows.length; i++) {
       try {
