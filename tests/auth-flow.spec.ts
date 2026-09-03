@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test';
 
+// Only the tests that exercise a real, registered account need these; the
+// rendering/navigation tests run against any stack without credentials.
+const EMAIL = process.env.E2E_EMAIL ?? '';
+const PASSWORD = process.env.E2E_PASSWORD ?? '';
+const NEEDS_ACCOUNT = 'Set E2E_EMAIL to run tests that need a registered account';
+const NEEDS_CREDENTIALS = 'Set E2E_EMAIL and E2E_PASSWORD to run authenticated tests';
+
 test.describe('Auth Flow — Page Rendering & Navigation', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -68,7 +75,8 @@ test.describe('Auth Flow — Page Rendering & Navigation', () => {
     });
 
     test('shows error for already-registered email', async ({ page }) => {
-      await page.fill('input[type="email"]', 'info@techsofcolor.org');
+      test.skip(!EMAIL, NEEDS_ACCOUNT);
+      await page.fill('input[type="email"]', EMAIL);
       await page.fill('input[type="password"]', 'TestPass123!');
       await page.click('button[type="submit"]');
       await expect(page.locator('.text-destructive')).toBeVisible({ timeout: 10000 });
@@ -105,7 +113,8 @@ test.describe('Auth Flow — Page Rendering & Navigation', () => {
     });
 
     test('submitting email navigates to reset password page', async ({ page }) => {
-      await page.fill('input[type="email"]', 'info@techsofcolor.org');
+      test.skip(!EMAIL, NEEDS_ACCOUNT);
+      await page.fill('input[type="email"]', EMAIL);
       await page.click('button[type="submit"]');
       await expect(page.locator('h1:has-text("Reset Password")')).toBeVisible({ timeout: 10000 });
     });
@@ -115,9 +124,11 @@ test.describe('Auth Flow — Page Rendering & Navigation', () => {
   // RESET PASSWORD PAGE
   // ═══════════════════════════════════════════════════════════════
   test.describe('Reset Password Page', () => {
+    test.skip(!EMAIL, NEEDS_ACCOUNT);
+
     test.beforeEach(async ({ page }) => {
       await page.click('text=Forgot password?');
-      await page.fill('input[type="email"]', 'info@techsofcolor.org');
+      await page.fill('input[type="email"]', EMAIL);
       await page.click('button[type="submit"]');
       await page.waitForSelector('h1:has-text("Reset Password")', { timeout: 10000 });
     });
@@ -129,7 +140,7 @@ test.describe('Auth Flow — Page Rendering & Navigation', () => {
     });
 
     test('displays the target email', async ({ page }) => {
-      await expect(page.locator('text=info@techsofcolor.org')).toBeVisible();
+      await expect(page.locator(`text=${EMAIL}`)).toBeVisible();
     });
 
     test('"Back to sign in" links to login', async ({ page }) => {
@@ -167,11 +178,12 @@ test.describe('Auth Flow — Page Rendering & Navigation', () => {
     });
 
     test('Successful login reaches authenticated app', async ({ page }) => {
+      test.skip(!EMAIL || !PASSWORD, NEEDS_CREDENTIALS);
       await page.evaluate(() => {
         localStorage.setItem('riisemap_onboarding', 'true');
       });
-      await page.fill('input[type="email"]', 'info@techsofcolor.org');
-      await page.fill('input[type="password"]', 'RiiseMap2026!');
+      await page.fill('input[type="email"]', EMAIL);
+      await page.fill('input[type="password"]', PASSWORD);
       await page.click('button[type="submit"]');
       await expect(page.locator('nav, [data-sidebar]')).toBeVisible({ timeout: 15000 });
     });
