@@ -12,11 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useGetPathways, useCreatePathway, useUpdatePathway, useGetPrograms, useGetLearners, type Pathway } from "@workspace/api-client-react";
+import { useGetPathways, getGetPathwaysQueryKey, useCreatePathway, useUpdatePathway, useGetPrograms, useGetLearners, type Pathway } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { authFetch } from "@/lib/auth-fetch";
+import { normalizePathways } from "@/lib/normalize-pathway";
 import Papa from "papaparse";
 
 type View = "list" | "detail" | "add" | "edit";
@@ -111,7 +112,7 @@ function TagInput({
 export default function Pathways() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: pathways = [], isLoading: pathwaysLoading } = useGetPathways();
+  const { data: pathways = [], isLoading: pathwaysLoading } = useGetPathways({ query: { queryKey: getGetPathwaysQueryKey(), select: normalizePathways } });
   const { data: programs = [] } = useGetPrograms();
   const { data: allLearners = [] } = useGetLearners();
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "name-az" | "name-za">("newest");
