@@ -15,11 +15,15 @@ import {
   pathwayProgramsTable,
   fundingSourcesTable,
   fundingSourceGoalsTable,
+  successStoriesTable,
+  auditLogTable,
   type Learner,
   type LearnerNote,
   type Program,
   type Pathway,
   type FundingSource,
+  type SuccessStory,
+  type AuditLog,
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { createTestApp, createTestDatabase, type TestDatabase, type TestTenant } from "../test/harness";
@@ -33,6 +37,8 @@ interface TenantFixtures {
   program: Program;
   pathway: Pathway;
   fundingSource: FundingSource;
+  story: SuccessStory;
+  auditEntry: AuditLog;
 }
 
 let a: TenantFixtures;
@@ -102,7 +108,15 @@ async function seedTenant(tenant: TestTenant, tag: string): Promise<TenantFixtur
   await tdb.db
     .insert(fundingSourceGoalsTable)
     .values({ fundingSourceId: fundingSource.id, title: `Goal ${tag}` });
-  return { learner, note, program, pathway, fundingSource };
+  const [story] = await tdb.db
+    .insert(successStoriesTable)
+    .values({ orgId, learnerId: learner.id, learnerName: learner.name, headline: `Story ${tag}`, story: `Body ${tag}` })
+    .returning();
+  const [auditEntry] = await tdb.db
+    .insert(auditLogTable)
+    .values({ orgId, action: "created", entityType: "learner", entityId: learner.id, entityName: learner.name, userEmail: tenant.user.email })
+    .returning();
+  return { learner, note, program, pathway, fundingSource, story, auditEntry };
 }
 
 beforeAll(async () => {
@@ -327,6 +341,74 @@ describe("funding-source goals", () => {
       .where(eq(fundingSourceGoalsTable.fundingSourceId, b.fundingSource.id));
     expect(goals).toHaveLength(1);
     expect((await asA().get(`/api/funding-sources/${a.fundingSource.id}/goals`)).status).toBe(200);
+  });
+});
+
+describe("success stories and audit log", () => {
+  it("GET /success-stories lists only Org A's stories", async () => {
+    const res = await asA().get("/api/success-stories");
+    expect(res.status).toBe(200);
+    const ids = res.body.map((s: { id: number }) => s.id);
+    expect(ids).toContain(a.story.id);
+    expect(ids).not.toContain(b.story.id);
+    for (const row of res.body) expect(row.orgId).toBe(tdb.orgA.org.id);
+  });
+
+  it("DELETE another org's story is 404 and the row survives; own story deletes", async () => {
+    expect((await asA().delete(`/api/success-stories/${b.story.id}`)).status).toBe(404);
+    expect(await tdb.db.select().from(successStoriesTable).where(eq(successStoriesTable.id, b.story.id))).toHaveLength(1);
+
+    const [own] = await tdb.db
+      .insert(successStoriesTable)
+      .values({ orgId: tdb.orgA.org.id, learnerId: null, learnerName: "Del", headline: "h", story: "s" })
+      .returning();
+    expect((await asA().delete(`/api/success-stories/${own.id}`)).status).toBe(200);
+  });
+
+  it("POST /success-stories with another org's learnerId is 404 and writes nothing", async () => {
+    const before = await tdb.db.select().from(successStoriesTable);
+    const res = await asA()
+      .post("/api/success-stories")
+      .send({ learnerId: b.learner.id, learnerName: b.learner.name, headline: "h", story: "s" });
+    expect(res.status).toBe(404);
+    expect(await tdb.db.select().from(successStoriesTable)).toHaveLength(before.length);
+  });
+
+  it("POST /success-stories with an own learner succeeds and stamps the caller's orgId", async () => {
+    const res = await asA()
+      .post("/api/success-stories")
+      .send({ learnerId: a.learner.id, learnerName: a.learner.name, headline: "h", story: "s" });
+    expect(res.status).toBe(201);
+    expect(res.body.orgId).toBe(tdb.orgA.org.id);
+    expect(res.body.learnerId).toBe(a.learner.id);
+  });
+
+  it("POST /success-stories without a learner is accepted and still org-scoped", async () => {
+    const res = await asA().post("/api/success-stories").send({ learnerName: "Orphan", headline: "h", story: "s" });
+    expect(res.status).toBe(201);
+    expect(res.body.orgId).toBe(tdb.orgA.org.id);
+    expect(res.body.learnerId).toBeNull();
+  });
+
+  it("GET /audit-log returns only Org A's entries", async () => {
+    const res = await asA().get("/api/audit-log");
+    expect(res.status).toBe(200);
+    const ids = res.body.map((l: { id: number }) => l.id);
+    expect(ids).toContain(a.auditEntry.id);
+    expect(ids).not.toContain(b.auditEntry.id);
+    for (const row of res.body) expect(row.orgId).toBe(tdb.orgA.org.id);
+  });
+
+  it("logAudit rows written through a mutating route carry the caller's orgId and email", async () => {
+    const created = await asA().post("/api/programs").send(programBody("A-audit"));
+    expect(created.status).toBe(201);
+
+    const res = await asA().get("/api/audit-log");
+    expect(res.status).toBe(200);
+    const written = res.body.find((l: { entityName: string }) => l.entityName === "Program A-audit");
+    expect(written).toBeDefined();
+    expect(written.orgId).toBe(tdb.orgA.org.id);
+    expect(written.userEmail).toBe(tdb.orgA.user.email);
   });
 });
 
