@@ -61,7 +61,13 @@ router.put("/funding-sources/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (req.body.amount != null) req.body.amount = String(req.body.amount);
-    const data = insertFundingSourceSchema.parse(req.body);
+    // Partial update: the client saves the narrative on its own ({ narrative }),
+    // so requiring the full body 400s every save. strict() still rejects unknown keys.
+    const data = insertFundingSourceSchema.partial().strict().parse(req.body);
+    if (Object.keys(data).length === 0) {
+      res.status(400).json({ error: "At least one field must be provided" });
+      return;
+    }
     const where = and(eq(fundingSourcesTable.id, id), eq(fundingSourcesTable.orgId, orgId));
     const [updated] = await db.update(fundingSourcesTable).set(data).where(where).returning();
     if (!updated) { res.status(404).json({ error: "Funding source not found" }); return; }
