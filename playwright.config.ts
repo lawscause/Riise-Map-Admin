@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  // tests/guard holds Vitest guard tests, not Playwright specs.
+  testIgnore: ['**/guard/**'],
   timeout: 60000,
   use: {
     // Never default to a deployed stack; point E2E_BASE_URL at one explicitly.
