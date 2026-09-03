@@ -80,7 +80,13 @@ router.post("/pathways/import", async (req, res) => {
   try {
     const rows: unknown[] = req.body;
     if (!Array.isArray(rows) || rows.length === 0) { res.status(400).json({ error: "Request body must be a non-empty array" }); return; }
-    const results = { imported: 0, ids: [] as number[], errors: [] as { row: number; message: string }[] };
+    // ids stays positionally aligned with the request rows: one entry per row,
+    // null for a row that failed, so clients can link sub-resources by index.
+    const results: { imported: number; ids: (number | null)[]; errors: { row: number; message: string }[] } = {
+      imported: 0,
+      ids: [],
+      errors: [],
+    };
     for (let i = 0; i < rows.length; i++) {
       try {
         const row: any = rows[i];
@@ -96,6 +102,7 @@ router.post("/pathways/import", async (req, res) => {
         results.imported++;
         results.ids.push(created.id);
       } catch (e: any) {
+        results.ids.push(null);
         results.errors.push({ row: i + 1, message: e.message || "Invalid data" });
       }
     }

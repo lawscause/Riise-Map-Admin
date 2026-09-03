@@ -856,12 +856,15 @@ export default function Pathways() {
                     // Save program associations for imported pathways
                     if (result.imported > 0 && result.ids) {
                       for (let i = 0; i < result.ids.length; i++) {
+                        // ids[i] is positionally aligned with validRows[i]; null marks a failed row.
+                        const pathwayId = result.ids[i];
+                        if (pathwayId == null) continue;
                         const progStr = validRows[i]?._programs;
                         if (progStr) {
                           const progNameList = progStr.split("|").map((s: string) => s.trim()).filter(Boolean);
                           const progIds = programs.filter((p: any) => progNameList.includes(p.name)).map((p: any) => p.id);
                           if (progIds.length > 0) {
-                            await authFetch(`${baseUrl}/api/pathways/${result.ids[i]}/programs`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ programIds: progIds }) });
+                            await authFetch(`${baseUrl}/api/pathways/${pathwayId}/programs`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ programIds: progIds }) });
                           }
                         }
                       }
