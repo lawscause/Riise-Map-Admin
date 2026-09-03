@@ -10,7 +10,8 @@ export const projectRouter = Router();
 projectRouter.get("/learners/:learnerId/projects", async (req, res) => {
   const learnerId = parseInt(req.params.learnerId, 10);
   if (isNaN(learnerId)) {
-    return res.status(400).json({ error: "Invalid learner ID" });
+    res.status(400).json({ error: "Invalid learner ID" });
+    return;
   }
   await ownedLearner(req, learnerId);
   try {

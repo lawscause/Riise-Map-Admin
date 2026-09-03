@@ -55,7 +55,8 @@ router.post("/programs", async (req, res) => {
       .from(programsTable)
       .where(and(eq(programsTable.programTag, data.programTag), eq(programsTable.orgId, orgId)));
     if (existing.length > 0) {
-      return res.status(409).json({ error: "A program with this tag already exists." });
+      res.status(409).json({ error: "A program with this tag already exists." });
+      return;
     }
     const [newProgram] = await db.insert(programsTable).values({ ...data, orgId }).returning();
     await logAudit(req, "created", "program", newProgram.id, newProgram.name);
@@ -86,7 +87,8 @@ router.put("/programs/:id", async (req, res) => {
           ),
         );
       if (existing.length > 0) {
-        return res.status(409).json({ error: "A program with this tag already exists." });
+        res.status(409).json({ error: "A program with this tag already exists." });
+        return;
       }
     }
     const [updatedProgram] = await db.update(programsTable).set(data).where(where).returning();

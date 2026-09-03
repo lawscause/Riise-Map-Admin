@@ -46,9 +46,8 @@ jobs:
     name: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Root typecheck is red on main (pre-existing). Non-blocking until T10 lands a
-    # green baseline — whoever lands T10: remove `continue-on-error` below.
-    continue-on-error: true
+    # Root typecheck is green as of T10 (fix/root-typecheck-green); the job is
+    # blocking again and guards the zero-error baseline.
     steps:
       - uses: actions/checkout@v4
 
@@ -73,5 +72,5 @@ jobs:
           {
             echo "## typecheck: ${OUTCOME}"
             echo
-            echo "non-blocking until root typecheck is green (T10)"
+            echo "root typecheck is green and blocking as of T10"
           } >> "$GITHUB_STEP_SUMMARY"

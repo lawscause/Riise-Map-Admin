@@ -45,7 +45,8 @@ router.post("/learners", async (req, res) => {
     const data = insertLearnerSchema.parse(req.body);
     const existing = await db.select().from(learnersTable).where(eq(learnersTable.email, data.email));
     if (existing.length > 0) {
-      return res.status(409).json({ error: "A learner with this email already exists." });
+      res.status(409).json({ error: "A learner with this email already exists." });
+      return;
     }
     const [newLearner] = await db.insert(learnersTable).values({ ...data, orgId }).returning();
     await logAudit(req, "created", "learner", newLearner.id, newLearner.name);
