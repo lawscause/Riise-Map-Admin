@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, varchar, date, jsonb, numeric, timestamp, boolean, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, varchar, date, jsonb, numeric, timestamp, boolean, customType, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -82,7 +82,7 @@ export const programsTable = pgTable("programs", {
   id: serial("id").primaryKey(),
   orgId: integer("org_id").references(() => organizationsTable.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
-  programTag: varchar("programTag", { length: 100 }).notNull().unique(),
+  programTag: varchar("programTag", { length: 100 }).notNull(),
   description: text("description").notNull(),
   pathwayCategory: varchar("pathwayCategory", { length: 255 }).notNull(),
   activeLearners: integer("activeLearners").notNull(),
@@ -95,7 +95,11 @@ export const programsTable = pgTable("programs", {
   startDate: varchar("startDate", { length: 255 }).notNull(),
   endDate: varchar("endDate", { length: 255 }).notNull(),
   pathways: jsonb("pathways"),
-});
+}, (table) => ({
+  // Tags collide per organization only; the old global unique() on programTag
+  // blocked two orgs from ever using the same tag (F6).
+  orgTagUnique: uniqueIndex("programs_org_id_program_tag_unique").on(table.orgId, table.programTag),
+}));
 
 export const insertProgramSchema = createInsertSchema(programsTable).omit({ id: true, orgId: true });
 export type InsertProgram = z.infer<typeof insertProgramSchema>;

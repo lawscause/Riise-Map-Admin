@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, programsTable, insertProgramSchema, pathwaysTable, learnersTable, fundingSourcesTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, ne, desc } from "drizzle-orm";
 import { logAudit } from "./audit-log";
 import { requireOrg } from "../lib/tenant";
 
@@ -49,7 +49,11 @@ router.post("/programs", async (req, res) => {
   const orgId = requireOrg(req);
   try {
     const data = insertProgramSchema.parse(req.body);
-    const existing = await db.select().from(programsTable).where(eq(programsTable.programTag, data.programTag));
+    // Tags are unique per organization, not globally (F6).
+    const existing = await db
+      .select({ id: programsTable.id })
+      .from(programsTable)
+      .where(and(eq(programsTable.programTag, data.programTag), eq(programsTable.orgId, orgId)));
     if (existing.length > 0) {
       return res.status(409).json({ error: "A program with this tag already exists." });
     }
@@ -68,9 +72,22 @@ router.put("/programs/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     const data = insertProgramSchema.partial().parse(req.body);
     const where = and(eq(programsTable.id, id), eq(programsTable.orgId, orgId));
-    const existing = await db.select().from(programsTable).where(eq(programsTable.programTag, data.programTag));
-    if (existing.length > 0 && existing[0].id !== id) {
-      return res.status(409).json({ error: "A program with this tag already exists." });
+    // Tag uniqueness is per organization, and only applies when the tag itself
+    // is being changed — an update without programTag never collides (F6).
+    if (data.programTag !== undefined) {
+      const existing = await db
+        .select({ id: programsTable.id })
+        .from(programsTable)
+        .where(
+          and(
+            eq(programsTable.programTag, data.programTag),
+            eq(programsTable.orgId, orgId),
+            ne(programsTable.id, id),
+          ),
+        );
+      if (existing.length > 0) {
+        return res.status(409).json({ error: "A program with this tag already exists." });
+      }
     }
     const [updatedProgram] = await db.update(programsTable).set(data).where(where).returning();
     if (!updatedProgram) { res.status(404).json({ error: "Program not found" }); return; }
