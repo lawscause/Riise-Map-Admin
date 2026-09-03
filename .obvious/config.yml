@@ -1,0 +1,5 @@
+# Obvious repo policy — auto-detected from GitHub repo settings
+# Repo: lawscause/Riise-Map-Admin (default branch: main; squash merges enabled)
+defaultBranch: main
+mergeMethod: squash
+releaseBase: main
